@@ -1,0 +1,343 @@
+{
+  "info": {
+    "name": "Sleep Tracker API",
+    "description": "Full collection for the Sleep Tracker Django REST API.\nBase URL: http://localhost:8000/api\n\nAuth flow:\n1. POST /auth/register/ or /auth/login/ → copy the `access` token\n2. Set the `access` variable in the collection variables\n3. All protected requests auto-attach Bearer token via the pre-request script",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000/api", "type": "string" },
+    { "key": "access",   "value": "",  "type": "string" },
+    { "key": "refresh",  "value": "",  "type": "string" },
+    { "key": "record_id","value": "1", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/auth/register/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"aman\",\n  \"email\": \"aman@example.com\",\n  \"password\": \"test1234\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const r = pm.response.json();",
+                "if (r.access)  { pm.collectionVariables.set('access',  r.access); }",
+                "if (r.refresh) { pm.collectionVariables.set('refresh', r.refresh); }"
+              ]
+            }
+          }],
+          "response": [{
+            "name": "201 Created",
+            "status": "Created",
+            "code": 201,
+            "body": "{\n  \"access\": \"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...\",\n  \"refresh\": \"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...\",\n  \"user\": {\n    \"id\": 1,\n    \"username\": \"aman\",\n    \"email\": \"aman@example.com\"\n  }\n}"
+          }]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/auth/login/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"aman\",\n  \"password\": \"test1234\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const r = pm.response.json();",
+                "if (r.access)  { pm.collectionVariables.set('access',  r.access); }",
+                "if (r.refresh) { pm.collectionVariables.set('refresh', r.refresh); }"
+              ]
+            }
+          }],
+          "response": [{
+            "name": "200 OK",
+            "status": "OK",
+            "code": 200,
+            "body": "{\n  \"access\": \"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...\",\n  \"refresh\": \"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...\",\n  \"user\": {\n    \"id\": 1,\n    \"username\": \"aman\",\n    \"email\": \"aman@example.com\"\n  }\n}"
+          }, {
+            "name": "401 Unauthorized",
+            "status": "Unauthorized",
+            "code": 401,
+            "body": "{\n  \"error\": \"Invalid username or password.\"\n}"
+          }]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access}}" }
+            ],
+            "url": "{{base_url}}/auth/logout/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh}}\"\n}"
+            }
+          },
+          "response": [{
+            "name": "200 OK",
+            "status": "OK",
+            "code": 200,
+            "body": "{\n  \"message\": \"Logged out successfully.\"\n}"
+          }]
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/auth/refresh/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh}}\"\n}"
+            }
+          },
+          "response": [{
+            "name": "200 OK",
+            "status": "OK",
+            "code": 200,
+            "body": "{\n  \"access\": \"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...\"\n}"
+          }]
+        }
+      ]
+    },
+    {
+      "name": "Sleep Records",
+      "item": [
+        {
+          "name": "List All Records",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access}}" }],
+            "url": "{{base_url}}/records/"
+          },
+          "response": [{
+            "name": "200 OK",
+            "status": "OK",
+            "code": 200,
+            "body": "[\n  {\n    \"id\": 1,\n    \"date\": \"2024-04-21\",\n    \"sleep_time\": \"23:30:00\",\n    \"wake_time\": \"07:15:00\",\n    \"quality\": 4,\n    \"quality_display\": \"Good\",\n    \"notes\": \"Slept well\",\n    \"duration_minutes\": 465,\n    \"duration_hours\": \"7h 45m\",\n    \"category\": null,\n    \"category_name\": null,\n    \"created_at\": \"2024-04-21T10:00:00Z\",\n    \"updated_at\": \"2024-04-21T10:00:00Z\"\n  }\n]"
+          }]
+        },
+        {
+          "name": "Create Record",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access}}" }
+            ],
+            "url": "{{base_url}}/records/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"2024-04-22\",\n  \"sleep_time\": \"23:00\",\n  \"wake_time\": \"07:00\",\n  \"quality\": 4,\n  \"notes\": \"Felt rested\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const r = pm.response.json();",
+                "if (r.id) { pm.collectionVariables.set('record_id', r.id); }"
+              ]
+            }
+          }],
+          "response": [{
+            "name": "201 Created",
+            "status": "Created",
+            "code": 201,
+            "body": "{\n  \"id\": 2,\n  \"date\": \"2024-04-22\",\n  \"sleep_time\": \"23:00:00\",\n  \"wake_time\": \"07:00:00\",\n  \"quality\": 4,\n  \"quality_display\": \"Good\",\n  \"notes\": \"Felt rested\",\n  \"duration_minutes\": 480,\n  \"duration_hours\": \"8h 0m\",\n  \"category\": null,\n  \"category_name\": null,\n  \"created_at\": \"2024-04-22T08:00:00Z\",\n  \"updated_at\": \"2024-04-22T08:00:00Z\"\n}"
+          }]
+        },
+        {
+          "name": "Get Single Record",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access}}" }],
+            "url": "{{base_url}}/records/{{record_id}}/"
+          },
+          "response": [{
+            "name": "200 OK",
+            "status": "OK",
+            "code": 200,
+            "body": "{\n  \"id\": 1,\n  \"date\": \"2024-04-21\",\n  \"sleep_time\": \"23:30:00\",\n  \"wake_time\": \"07:15:00\",\n  \"quality\": 4,\n  \"quality_display\": \"Good\",\n  \"notes\": \"\",\n  \"duration_minutes\": 465,\n  \"duration_hours\": \"7h 45m\",\n  \"category\": null,\n  \"category_name\": null,\n  \"created_at\": \"2024-04-21T10:00:00Z\",\n  \"updated_at\": \"2024-04-21T10:00:00Z\"\n}"
+          }, {
+            "name": "404 Not Found",
+            "status": "Not Found",
+            "code": 404,
+            "body": "{\n  \"error\": \"Record not found.\"\n}"
+          }]
+        },
+        {
+          "name": "Update Record (Full)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access}}" }
+            ],
+            "url": "{{base_url}}/records/{{record_id}}/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"2024-04-21\",\n  \"sleep_time\": \"23:00\",\n  \"wake_time\": \"07:30\",\n  \"quality\": 5,\n  \"notes\": \"Updated — best sleep ever\"\n}"
+            }
+          },
+          "response": [{
+            "name": "200 OK",
+            "status": "OK",
+            "code": 200,
+            "body": "{\n  \"id\": 1,\n  \"date\": \"2024-04-21\",\n  \"sleep_time\": \"23:00:00\",\n  \"wake_time\": \"07:30:00\",\n  \"quality\": 5,\n  \"quality_display\": \"Excellent\",\n  \"notes\": \"Updated — best sleep ever\",\n  \"duration_minutes\": 510,\n  \"duration_hours\": \"8h 30m\",\n  \"category\": null,\n  \"category_name\": null,\n  \"created_at\": \"2024-04-21T10:00:00Z\",\n  \"updated_at\": \"2024-04-22T08:30:00Z\"\n}"
+          }]
+        },
+        {
+          "name": "Partial Update Record (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access}}" }
+            ],
+            "url": "{{base_url}}/records/{{record_id}}/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quality\": 5,\n  \"notes\": \"Actually, it was excellent!\"\n}"
+            }
+          },
+          "response": [{
+            "name": "200 OK",
+            "status": "OK",
+            "code": 200,
+            "body": "{\n  \"id\": 1,\n  \"quality\": 5,\n  \"quality_display\": \"Excellent\",\n  \"notes\": \"Actually, it was excellent!\"\n}"
+          }]
+        },
+        {
+          "name": "Delete Record",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access}}" }],
+            "url": "{{base_url}}/records/{{record_id}}/"
+          },
+          "response": [{
+            "name": "204 No Content",
+            "status": "No Content",
+            "code": 204,
+            "body": "{\n  \"message\": \"Record deleted.\"\n}"
+          }]
+        }
+      ]
+    },
+    {
+      "name": "Statistics",
+      "item": [
+        {
+          "name": "Get Sleep Stats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access}}" }],
+            "url": "{{base_url}}/stats/"
+          },
+          "response": [{
+            "name": "200 OK",
+            "status": "OK",
+            "code": 200,
+            "body": "{\n  \"total_records\": 10,\n  \"avg_duration_minutes\": 462.5,\n  \"avg_quality\": 3.8,\n  \"best_quality\": 5,\n  \"worst_quality\": 2,\n  \"longest_sleep_minutes\": 540,\n  \"shortest_sleep_minutes\": 360,\n  \"week_avg_duration_minutes\": 475.0,\n  \"week_avg_quality\": 4.1\n}"
+          }]
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "List Categories",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access}}" }],
+            "url": "{{base_url}}/categories/"
+          },
+          "response": [{
+            "name": "200 OK",
+            "status": "OK",
+            "code": 200,
+            "body": "[\n  {\n    \"id\": 1,\n    \"name\": \"Work day\",\n    \"color\": \"#3b82f6\",\n    \"record_count\": 5,\n    \"created_at\": \"2024-04-01T00:00:00Z\"\n  }\n]"
+          }]
+        },
+        {
+          "name": "Create Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access}}" }
+            ],
+            "url": "{{base_url}}/categories/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Weekend\",\n  \"color\": \"#22c55e\"\n}"
+            }
+          },
+          "response": [{
+            "name": "201 Created",
+            "status": "Created",
+            "code": 201,
+            "body": "{\n  \"id\": 2,\n  \"name\": \"Weekend\",\n  \"color\": \"#22c55e\",\n  \"record_count\": 0,\n  \"created_at\": \"2024-04-22T10:00:00Z\"\n}"
+          }]
+        }
+      ]
+    },
+    {
+      "name": "Profile",
+      "item": [
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access}}" }],
+            "url": "{{base_url}}/profile/"
+          },
+          "response": [{
+            "name": "200 OK",
+            "status": "OK",
+            "code": 200,
+            "body": "{\n  \"profile\": {\n    \"id\": 1,\n    \"username\": \"aman\",\n    \"email\": \"aman@example.com\",\n    \"bio\": \"\",\n    \"timezone\": \"UTC\",\n    \"created_at\": \"2024-04-01T00:00:00Z\",\n    \"updated_at\": \"2024-04-22T00:00:00Z\"\n  },\n  \"goal\": {\n    \"id\": 1,\n    \"target_duration_minutes\": 480,\n    \"target_duration_hours\": \"8h 0m\",\n    \"target_quality\": 4,\n    \"target_bedtime\": \"23:00:00\",\n    \"created_at\": \"2024-04-01T00:00:00Z\",\n    \"updated_at\": \"2024-04-22T00:00:00Z\"\n  },\n  \"user\": {\n    \"id\": 1,\n    \"username\": \"aman\",\n    \"email\": \"aman@example.com\"\n  }\n}"
+          }]
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access}}" }
+            ],
+            "url": "{{base_url}}/profile/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"profile\": {\n    \"bio\": \"I love sleeping!\",\n    \"timezone\": \"Asia/Almaty\"\n  },\n  \"goal\": {\n    \"target_duration_minutes\": 480,\n    \"target_quality\": 4,\n    \"target_bedtime\": \"23:00\"\n  }\n}"
+            }
+          },
+          "response": [{
+            "name": "200 OK",
+            "status": "OK",
+            "code": 200,
+            "body": "{\n  \"profile\": {\n    \"bio\": \"I love sleeping!\",\n    \"timezone\": \"Asia/Almaty\"\n  },\n  \"goal\": {\n    \"target_duration_minutes\": 480,\n    \"target_quality\": 4,\n    \"target_bedtime\": \"23:00:00\"\n  }\n}"
+          }]
+        }
+      ]
+    }
+  ]
+}
