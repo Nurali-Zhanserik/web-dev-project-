@@ -1,0 +1,119 @@
+Sample #3
+
+Задача #1
+
+groupadd sysadm
+groupadd dbops
+visudo /etc/sudoers.d/sysadm
+cat /etc/sudoers.d/sysadm
+# %sysadm ALL=(ALL) NOPASSWD: /usr/bin/systemctl
+
+chmod -R 440 /etc/sudoers.d/*
+
+Допольнительно я добавлю юзера для дальнейших шагов
+
+adduser dbuser
+usermod -aG dbops dbuser
+
+
+Задача #2
+2.1 Директория БД
+
+mkdir -p /var/lib/mysql-storage
+chown root:dbops /var/lib/mysql-storage
+chmod 770 /var/lib/mysql-storage
+
+2.2 Директория бэкапов
+
+mkdir -p /var/backups/mysql-storage
+chown root:dbops /var/backups/mysql-storage
+chmod 770 /var/backups/mysql-storage
+
+2.3 Скрипт бэкапов
+
+vi /usr/local/bin/backup.sh
+chmod 750 /usr/local/bin/backup.sh
+chown root:dbops /usr/local/bin/backup.sh
+
+
+
+#!/bin/bash
+
+BACKUPS_DIR=/var/backups/mysql-storage
+SOURCE=/var/lib/mysql-storage
+BACKUP_FILE="${BACKUPS_DIR}/$(date +%Y-%m-%d_%H-%M).zip"
+
+echo "Start backup"
+zip -r "$BACKUP_FILE" "$SOURCE"
+echo "Done"
+
+2.4 Таймер бэкапов
+
+
+vi /etc/systemd/system/backup.service
+vi /etc/systemd/system/backup.timer
+
+
+[Unit]
+Description=make backups daily
+
+[Timer]
+OnBootSec=15m
+OnUnitActiveSec=24h
+
+[Install]
+WantedBy=timers.target
+
+
+[Unit]
+Description=Backup service
+
+[Service]
+User=dbuser
+ExecStart=/usr/local/bin/backup.sh
+
+2.5 Активация таймера
+
+systemctl daemon-reload
+systemctl enable --now backup.timer
+
+Задача #3 и 4
+Их можно объединить вместе
+
+3.1 Создание systemd сервиса, который перезапустит БД в случае отказа
+
+podman generate systemd  \
+--name --new \
+--restart-policy=on-failure \
+--start-timeout=30 --stop-timeout 30 \
+ --wants=network-online.target \
+ --after=network-online.target \
+--files database
+
+3.2 Активация сервиса
+
+mkdir -p .config/systemd/user
+mv container-database.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+systemctl --user enable --now container-database.service
+
+4.1 Редактируем ~/.config/systemd/user/container-database.service и добавляем следующее в ExecStart
+
+—health-cmd="mysqladmin ping -h localhost" \
+--health-interval=30s \
+—health-on-failure=kill
+
+Задача #5
+
+nft add table ip FILTER
+
+nft add chain ip FILTER input { type filter hook input priority 0 \; policy accept \; }
+
+nft add rule ip FILTER input iif lo accept
+
+nft add rule ip FILTER input ct state established,related accept
+
+nft add rule ip FILTER input tcp dport { 22, 4200, 3306 } accept
+
+nft add rule ip FILTER input drop

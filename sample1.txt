@@ -1,0 +1,153 @@
+Sample #1
+
+Задача #1
+# Создать группы
+
+groupadd sysadm
+groupadd dbadm
+
+visudo /etc/sudoers.d/sysadm
+cat /etc/sudoers.d/sysadm
+# %sysadm ALL=(ALL) NOPASSWD: /usr/bin/systemctl
+
+# нужно 440, иначе Linux кинет ошибку
+chmod 440 /etc/sudoers.d/sysadm
+
+
+Задача #2
+2.1 Создание БД будет в следующем шаге. PostgreSQL подниму через podman и назову `database`. Запущу контейнер от юзера `db_user`
+
+2.2 Скрипт для бэкапов
+
+vi /usr/local/bin/db_backup.sh
+
+
+#!/bin/bash
+BACKUP_DIR=/var/backups/database
+TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
+
+podman exec database pg_dumpall -U postgres > "$BACKUP_DIR/backup_$TIMESTAMP.sql"
+
+
+2.3 Сервис для бэкапов
+
+vi /etc/systemd/system/db_backup.service
+
+
+[Unit]
+Description=database backup service
+
+[Service]
+Type=oneshot
+User=db_user
+ExecStart=/usr/local/bin/db_backup.sh
+
+2.4 Таймер для сервиса бэкапов
+
+vi /etc/systemd/system/db_backup.timer
+
+[Unit]
+Description=database backups every 2 hours
+
+[Timer]
+OnBootSec=5m
+OnUnitActiveSec=2h
+
+[Install]
+WantedBy=timers.target
+
+
+2.5 Создание директории для бэкапов
+
+mkdir -p /var/backups/database
+chown root:dbadm /var/backups/database
+chmod 770 /var/backups/database
+
+
+2.6 Активация сервиса
+
+systemctl daemon-reload
+systemctl enable —now db_backup.timer
+
+
+2.7 Создание аудита
+
+vi /etc/audit/rules.d/backup.rules
+
+
+-w /usr/local/bin/db_backup.sh -p wa -k backup_tamper
+
+-w /etc/systemd/system/db_backup.service -p wa -k backup_tamper
+-w /etc/systemd/system/db_backup.timer -p wa -k backup_tamper
+
+2.8 Активация аудита
+
+augenrules --load
+
+
+Задача #3
+3.1 Поднятие базы данных
+
+usermod -aG dbadm db_user
+mkdir -p /var/lib/database
+chown db_user:dbadm /var/lib/database
+chmod 770 /var/lib/database
+loginctl enable-linger db_user
+
+su - db_user bash -c 'podman run \
+--name=database --network=mynet \
+--cpus=1 --memory=512m \
+-p 5432:5432 \
+-e POSTGRES_PASSWORD=password \
+-v /var/lib/database:/var/lib/postgresql:Z \
+--userns keep-id:uid=999,gid=999 \
+-d postgres'
+
+
+3.2 Создание systemd-сервиса, который будет перезапускать базу данных
+Содержание сгенерированного файла можно посмотреть тут https://pastebin.com/Ee3a2xh5
+
+sudo su - db_user bash -c 'podman generate systemd \
+--name --new --restart-policy=on-failure \
+--start-timeout=30 --stop-timeout=30 \
+--wants=networks-online.target --after=networks-online.target \
+--files database;'
+# File created :/home/db_user/container-database.service
+
+
+3.3 Активация сервиса
+
+mkdir -p /home/db_user/.config/systemd/user
+mv /home/db_user/container-database.service /home/db_user/.config/systemd/user/
+
+# Это нужно, чтобы systemd мог создать директорию default.target.wants.
+chown -R db_user:db_user /home/db_user
+
+su - db_user -s /bin/bash -c 'XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user enable --now container-database.service'
+# Created symlink '/home/db_user/.config/systemd/user/default.target.wants/container-database.service' → '/home/db_user/.config/systemd/user/container-database.service'.
+
+# Также обязательно надо выполнить loginctl enable-linger db_user, но я уже выполнил это ранее
+
+
+Задача #4
+Т.к мы уже создали systemd-сервис ранее, то можно редактивровать его ExecStart
+
+vi /home/db_user/.config/systemd/user/container-database.service
+
+
+И нужно добавить следующее
+
+--health-cmd="pg_isready -U postg
+--health-timeout=10s
+--health-on-failure=kill
+
+--health-on-failure=kill убьёт при unhealthy контейнер, а т.к наш systemd unit содержит Restart, то в связке это даст нужный результат
+
+Задача #5
+
+nft add table ip FILTER
+nft add chain ip FILTER input { type filter hook input priority 0 \; policy accept \; }
+nft add rule ip FILTER input ct state established,related accept
+nft add rule ip FILTER input iif lo accept
+nft add rule ip FILTER input tcp dport { 22, 4200, 5432 } accept
+nft add rule ip FILTER input drop

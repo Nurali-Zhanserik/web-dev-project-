@@ -62,7 +62,7 @@ class SleepCategory(models.Model):
 
     class Meta:
         verbose_name = 'Sleep Category'
-        verbose_name_plural = 'Sleep Categories'
+        verbose_name_plurals = 'Sleep Categories'
         unique_together = ('user', 'name')
 
 

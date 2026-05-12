@@ -1,0 +1,150 @@
+Sample #2
+
+Задача 1
+
+useradd sysadm
+useradd operations
+
+visudo /etc/sudoers.d/sysadm
+cat /etc/sudoers.d/sysadm
+# %sysadm ALL=(ALL) NOPASSWD: /usr/bin/systemctl
+
+# нужно 440, иначе Linux кинет ошибку
+chmod 440 /etc/sudoers.d/sysadm
+
+Operations trigger build позже дадим т.к нам нужно сам Dockerfile написать
+
+Я тут также дал пароль operations т.к в будущем буду заходить в его shell и выполнять команды от него, чтобы не писать su - operaitons bash -c "..."
+
+passwd operations
+
+Задача 2
+2.1 Сначала пишем Dockerfile для сборки
+
+# Регаюсь от имени su -operations
+# Можно просто su - operations bash -c "команда"
+su - operations
+vi Dockerfile
+exit
+
+
+FROM golang:1.24.2 as build
+WORKDIR /app
+COPY go.mod go.sum ./
+COPY . .
+RUN go mod download
+RUN CGO_ENABLED=0 go build -o payment .
+
+FROM alpine:3.22.4 as run
+WORKDIR /app
+COPY --from=build /app/payment ./
+USER 65532
+EXPOSE 8080
+ENTRYPOINT ["/app/payment"]
+
+2.2 Создаю скрипт для автобильда
+
+sudo vi /usr/local/bin/payment_build.sh
+sudo chown operations:operations /usr/local/bin/payment_build.sh
+sudo chmod 770 /usr/local/bin/payment_build.sh
+
+
+payment_build.sh
+
+#!/bin/bash
+
+set -euo pipefail
+
+IMAGE_NAME='payment'
+DATE_TAG=$(date +%Y.%m.%d)
+REPO_DIR=$(mktemp -d)
+
+echo "Remove old image"
+podman image rm "${IMAGE_NAME}:latest" || true
+
+echo "Start clonning..."
+git clone https://github.com/dvalyayevkbtu/payment $REPO_DIR
+
+cp ~/Dockerfile $REPO_DIR
+
+echo "Start building..."
+podman build -t "${IMAGE_NAME}:latest" -t "${IMAGE_NAME}:${DATE_TAG}" "${REPO_DIR}"
+
+echo "Remove dangling images after multi-stage build"
+podman image prune -f
+
+rm -rf "$REPO_DIR"
+echo "Done: ${IMAGE_NAME}:latest ${IMAGE_NAME}:${DATE_TAG}"
+
+Задача #3
+3.1 Запуск образа
+
+export PAYMENT_PORT=8080
+podman run --name=payment \
+--cpus=1 --memory=512m \
+-p PAYMENT_PORT:8080 -d payment;
+
+3.2 Пуш в публичный docker hub
+
+podman login docker.io -u smilekundev
+# Надо будет ввести password или access token
+podman tag payment:latest smilekundev/payment:latest
+podman push smilekundev/payment:latest
+
+4. Надо сделать скрипт, который делает то же, что в 2 и 3; также сверху тест работоспосбность
+
+vi /usr/local/bin/test_payment.sh
+chown operations:operations /usr/local/bin/test_payment.sh
+chmod 770 /usr/local/bin/test_payment.sh 
+
+
+test_payment.sh
+
+#!/bin/bash
+
+if [[ -z "$PAYMENT_PORT" ]]; then
+ echo "Missing environment variable PAYMENT_PORT"
+ exit 1
+fi
+
+CONTAINER_NAME='payment'
+CHECK_URL="http://localhost:${PAYMENT_PORT}/payment"
+
+/usr/local/bin/build_payment.sh
+
+podman run --name=$CONTAINER_NAME -p $PAYMENT_PORT:8080 --cpus=1 --memory=512m -d payment
+
+sleep 2
+curl -f -X POST $CHECK_URL \
+ -H "Content-Type: application/json" \
+ -d '{"reference": "1","volume": "1000.20","currency": "USD"}'
+
+curl -f "${CHECK_URL}/1" && echo "Service is UP" || echo "Service is DOWN"
+
+echo "Removing container"
+podman rm -f $CONTAINER_NAME
+
+echo "Done
+
+Также надо добавить push образа в build_payment.sh
+Добавить следующее после сборки
+
+PUSH_NAME="smilekundev/${IMAGE_NAME}:latest"
+...
+echo "Pushing image"
+podman tag "${IMAGE_NAME}:latest" $PUSH_NAME
+podman push $PUSH_NAME
+
+Задача #5
+
+nft add table ip FILTER
+
+nft add chain ip FILTER input { type filter hook input priority 0 \; policy accept \; }
+
+nft add rule ip FILTER input ct state established,related accept
+
+nft add rule ip FILTER input iif lo accept
+
+nft add rule ip FILTER input tcp dport { 22, 4200, 8080 } accept
+
+nft add rule ip FILTER input drop

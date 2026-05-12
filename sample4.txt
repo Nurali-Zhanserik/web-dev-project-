@@ -1,0 +1,61 @@
+Sample 4
+
+Задача #1
+
+useradd john
+useradd fast-http
+usermod -aG httpadmins john
+usermod -aG httpadmins fast-http
+
+mkdir -p /home/fast-http/content
+chown fast-http:httpadmins /home/fast-http/content
+chmod 770 /home/fast-http/content
+
+sudo visudo /etc/sudoers.d/httpadmins
+
+
+%httpadmins ALl=(ALL) NOPASSWD: /usr/bin/systemctl start fast-http.service
+%httpadmins ALl=(ALL) NOPASSWD: /usr/bin/systemctl stop fast-http.service
+%httpadmins ALl=(ALL) NOPASSWD: /usr/bin/systemctl restart fast-http.service
+
+Задача #2
+
+mkdir -p /var/www/html
+vi /etc/fstab
+
+
+И вводим в конец файла следующее
+
+tmpfs /var/www/html tmpfs defaults,size=256m 0 0
+
+
+systemctl daemon-reload
+mount -a
+df -h | grep html
+# tmpfs 256M  0  256M  0% /var/www/html
+
+Задача #3
+
+vi /usr/local/bin/sync_content.sh
+chown root:httpadmins /usr/local/bin/sync_content.sh
+chmod 770 /usr/local/bin/sync_content.sh
+
+
+#!/bin/bash
+
+rsync -a /home/fast-http/content/ /var/www/html/
+
+Задача #4
+
+vi /home/fast-http/content/index.html
+# <h1>Hello World!</h1>
+python3 -m http.server 8080 --directory /var/www/html &
+
+Задача #5
+
+nft add table ip FILTER
+nft add chain ip FILTER input { type filter hook input priority 0 \; policy accept \; }
+nft add rule ip FILTER input ct state established,related accept
+nft add rule ip FILTER input iif lo accept
+nft add rule ip FILTER input tcp dport { 22, 4200, 8080 } accept
+nft add rule ip FILTER input drop

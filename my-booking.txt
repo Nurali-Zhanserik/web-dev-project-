@@ -1,0 +1,78 @@
+https://github.com/dvalyayevkbtu/my-booking
+
+1. git clone
+
+git clone https://github.com/dvalyayevkbtu/my-booking
+git clone https://github.com/dvalyayevkbtu/payment
+
+2. Dockerfile
+
+vi Dockerfile
+cp Dockerfile payment/
+cp Dockerfile my-booking/
+
+
+FROM golang:1.24.2 as builder
+WORKDIR /build
+COPY go.mod go.sum .
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -o run .
+
+FROM alpine:3.23.4 as runner
+WORKDIR /app
+COPY --from=builder /build/run .
+EXPOSE 8080
+USER 65532
+ENTRYPOINT ["/app/run"]
+
+3. payment build and startup
+
+cd payment
+podman build -t payment .
+podman run --name payment -p 8000:8080 -d payment
+
+4. PostgreSQL
+
+mkdir -p /var/lib/database
+chown smile:smile /var/lib/database
+
+podman run \
+--name database \
+-p 5432:5432 \
+-v /var/lib/database:/var/lib/postgresql:Z \
+--userns keep-id:uid=999,gid=999 \
+-e POSTGRES_PASSWORD=password \
+-e POSTGRES_DB=db \
+-d postgres:18
+
+5. my-booking.json
+
+# at ~
+vi my-booking.json
+
+
+{
+    "db": {
+        "host": "host.containers.internal",
+        "port": "5432",
+        "name": "db",
+        "user": "postgres",
+        "password": "password"
+    },
+    "payment": {
+        "url": "http://host.containers.internal:8000"
+    }
+}
+
+
+6. my-booking build and startup
+
+cd my-booking
+podman build -t my-booking .
+podman run \
+--name my-booking \
+-v $(pwd)/my-booking.json:/app/my-booking.json:ro \
+-e BOOKING_CONFIG_PATH=/app/my-booking.json \
+-p 8080:8080 -d \
+my-booking
