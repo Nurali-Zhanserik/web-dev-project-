@@ -87,10 +87,15 @@ class SleepRecordSerializer(serializers.ModelSerializer):
         return obj.category.name if obj.category else None
 
     def validate(self, data):
-        sleep = data.get('sleep_time')
-        wake = data.get('wake_time')
+        sleep = data.get('sleep_time', getattr(self.instance, 'sleep_time', None))
+        wake = data.get('wake_time', getattr(self.instance, 'wake_time', None))
         if sleep and wake and sleep == wake:
             raise serializers.ValidationError("Sleep time and wake time cannot be the same.")
+
+        category = data.get('category')
+        request = self.context.get('request')
+        if category is not None and request is not None and category.user_id != request.user.id:
+            raise serializers.ValidationError({"category": "Invalid category for this user."})
         return data
 
 
