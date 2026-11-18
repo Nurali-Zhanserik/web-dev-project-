@@ -12,6 +12,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 
 from .models import SleepRecord, SleepCategory, UserProfile, SleepGoal
+from .stats_strategy import AllTimeStatsStrategy, WeeklyStatsStrategy
 from .serializers import (
     LoginSerializer, SleepStatsSerializer,
     UserSerializer, SleepRecordSerializer,
@@ -119,32 +120,9 @@ def sleep_stats_view(request):
     FBV 4 — Sleep statistics for the authenticated user.
     Uses SleepStatsSerializer (plain Serializer) to shape the response.
     """
-    records = SleepRecord.objects.for_user(request.user)
-    week_records = SleepRecord.objects.this_week(request.user)
-
-    aggregates = records.aggregate(
-        avg_dur=Avg('duration_minutes'),
-        avg_qual=Avg('quality'),
-        best=Max('quality'),
-        worst=Min('quality'),
-        longest=Max('duration_minutes'),
-        shortest=Min('duration_minutes'),
-    )
-    week_aggregates = week_records.aggregate(
-        w_dur=Avg('duration_minutes'),
-        w_qual=Avg('quality'),
-    )
-
     stats_data = {
-        'total_records': records.count(),
-        'avg_duration_minutes': round(aggregates['avg_dur'] or 0, 1),
-        'avg_quality': round(aggregates['avg_qual'] or 0, 1),
-        'best_quality': aggregates['best'],
-        'worst_quality': aggregates['worst'],
-        'longest_sleep_minutes': aggregates['longest'],
-        'shortest_sleep_minutes': aggregates['shortest'],
-        'week_avg_duration_minutes': round(week_aggregates['w_dur'] or 0, 1),
-        'week_avg_quality': round(week_aggregates['w_qual'] or 0, 1),
+        **AllTimeStatsStrategy().compute(request.user),
+        **WeeklyStatsStrategy().compute(request.user),
     }
 
     serializer = SleepStatsSerializer(stats_data)
@@ -173,7 +151,7 @@ class SleepRecordListCreateView(APIView):
         """
         Requirement: link created objects to the authenticated user (request.user).
         """
-        serializer = SleepRecordSerializer(data=request.data)
+        serializer = SleepRecordSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save(user=request.user)  # link to request.user
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -204,7 +182,7 @@ class SleepRecordDetailView(APIView):
         record = self._get_record(pk, request.user)
         if not record:
             return Response({'error': 'Record not found.'}, status=status.HTTP_404_NOT_FOUND)
-        serializer = SleepRecordSerializer(record, data=request.data)
+        serializer = SleepRecordSerializer(record, data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save(user=request.user)
             return Response(serializer.data)
@@ -214,7 +192,7 @@ class SleepRecordDetailView(APIView):
         record = self._get_record(pk, request.user)
         if not record:
             return Response({'error': 'Record not found.'}, status=status.HTTP_404_NOT_FOUND)
-        serializer = SleepRecordSerializer(record, data=request.data, partial=True)
+        serializer = SleepRecordSerializer(record, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             serializer.save(user=request.user)
             return Response(serializer.data)
